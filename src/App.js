@@ -6,10 +6,14 @@ import api from "./utils/api";
 import sortByDate from "./utils/sortByDate";
 import isLocalHost from "./utils/isLocalHost";
 import "./App.css";
+import styled from "styled-components";
+import { ReactMic } from "react-mic";
 
 const App = () => {
   const [todos, setTodos] = useState([]);
   const [showMenu, setShowMenu] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recording, setRecording] = useState(null);
   const inputElement = useRef(null);
   useEffect(() => {
     const fetchAll = async () => {
@@ -281,6 +285,45 @@ const App = () => {
     );
   };
 
+  const RecordFooter = () => (
+    <FixedBottom>
+      <MicButton onClick={() => setIsRecording(true)}>
+        <i class="fas fa-microphone"></i>
+      </MicButton>
+    </FixedBottom>
+  );
+  if (isRecording) {
+    return (
+      <div>
+        <ReactMic
+          record={isRecording && isRecording !== "awaitingConfirm"}
+          className="sound-wave"
+          onStop={recordedBlob => {
+            console.log("recordedBlob is: ", recordedBlob);
+            setIsRecording(false);
+            setRecording(recordedBlob);
+          }}
+          onData={recordedBlob =>
+            console.log("chunk of real-time data is: ", recordedBlob)
+          }
+          strokeColor="#000000"
+          backgroundColor="#FF4081"
+        />
+        <button
+          onClick={() => {
+            console.log("stop");
+            setIsRecording("awaitingConfirm");
+            const confirmed = window.confirm("save recording?");
+            if (confirmed) console.log("save");
+            else console.log("not saved");
+          }}
+          type="button"
+        >
+          Stop
+        </button>
+      </div>
+    );
+  }
   return (
     <div className="app">
       <div className="todo-list">
@@ -304,7 +347,9 @@ const App = () => {
         </form>
 
         <RenderTodos />
+        <RecordFooter></RecordFooter>
       </div>
+
       <SettingsMenu
         showMenu={showMenu}
         handleModalClose={closeModal}
@@ -329,3 +374,24 @@ function getTodoId(todo) {
 }
 
 export default App;
+
+const FixedBottom = styled.div`
+  position: fixed;
+  background: #eee;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-top: 2px solid black;
+  text-align: center;
+`;
+
+const MicButton = styled.div`
+  background: #ff4d22;
+  width: 40px;
+  height: 40px;
+  border-radius: 100%;
+  font-size: 1.5rem;
+  line-height: 40px;
+  margin: 8px auto;
+  cursor: pointer;
+`;
