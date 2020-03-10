@@ -7,11 +7,13 @@ import sortByDate from "./utils/sortByDate";
 import isLocalHost from "./utils/isLocalHost";
 import "./App.css";
 import styled from "styled-components";
-import { ReactMic } from "react-mic";
+import { ReactMic } from "@cleandersonlobo/react-mic";
+import AudioPlayer from "react-h5-audio-player";
+import "react-h5-audio-player/lib/styles.css";
 
 const App = () => {
   const [todos, setTodos] = useState([]);
-  const [recordings, setRecordings] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const inputElement = useRef(null);
@@ -34,6 +36,7 @@ const App = () => {
 
         console.log("all todos", todos);
         setTodos(todos);
+        setLoading(false);
       });
     };
     fetchAll();
@@ -84,6 +87,7 @@ const App = () => {
   };
 
   const deleteTodo = e => {
+    console.log("delete me");
     const todoId = e.target.dataset.id;
 
     // Optimistically remove todo from UI
@@ -200,12 +204,15 @@ const App = () => {
     setShowMenu(true);
   };
   const RenderTodos = () => {
+    if (loading) {
+      return "loading";
+    }
     if (!todos || !todos.length) {
       // Loading State here
-      return null;
+      return "no recordings";
     }
 
-    const timeStampKey = "ts";
+    const timeStampKey = "startTime";
     const orderBy = "desc"; // or `asc`
     const sortOrder = sortByDate(timeStampKey, orderBy);
     const todosByDate = todos.sort(sortOrder);
@@ -214,33 +221,23 @@ const App = () => {
       <div>
         {todosByDate.map((todo, i) => {
           const { data, ref } = todo;
+          if (!data) return null;
           const id = getTodoId(todo);
           // only show delete button after create API response returns
-          let deleteButton;
-          if (ref) {
-            deleteButton = (
-              <button data-id={id} onClick={deleteTodo}>
-                delete
-              </button>
-            );
-          }
+          const deleteButton = ref ? (
+            <button data-id={id} onClick={deleteTodo}>
+              delete
+            </button>
+          ) : (
+            <span>
+              <i class="fas fa-spinner fa-pulse"></i>
+            </span>
+          );
+
           return (
             <div key={i} className="todo-item">
               <label className="todo">
-                <div className="todo-list-title">
-                  <div>Me:</div>
-                  <div>
-                    <i class="fas fa-play"></i>{" "}
-                    {Math.round((data.stopTime - data.startTime) / 1000)}s
-                  </div>
-                  <ContentEditable
-                    tagName="span"
-                    editKey={id}
-                    onBlur={updateTodoTitle} // save on enter/blur
-                    html={data.title}
-                    // onChange={this.handleDataChange} // save on change
-                  />
-                </div>
+                <audio controls src={data.base64data} />
               </label>
               {deleteButton}
             </div>
@@ -250,13 +247,6 @@ const App = () => {
     );
   };
 
-  const RecordFooter = () => (
-    <FixedBottom>
-      <MicButton onClick={() => setIsRecording(true)}>
-        <i class="fas fa-microphone"></i>
-      </MicButton>
-    </FixedBottom>
-  );
   if (isRecording) {
     return (
       <div>
@@ -275,14 +265,13 @@ const App = () => {
           strokeColor="#000000"
           backgroundColor="#FF4081"
         />
-        <button
+        <FixedBottomDark
           onClick={() => {
             setIsRecording("awaitingConfirm");
           }}
-          type="button"
         >
-          Stop
-        </button>
+          End Recording
+        </FixedBottomDark>
       </div>
     );
   }
@@ -290,7 +279,12 @@ const App = () => {
     <div className="app">
       <div className="todo-list">
         <RenderTodos />
-        <RecordFooter></RecordFooter>
+
+        <FixedBottom>
+          <MicButton onClick={() => setIsRecording(true)}>
+            <i class="fas fa-microphone"></i>
+          </MicButton>
+        </FixedBottom>
       </div>
 
       <SettingsMenu
@@ -326,6 +320,15 @@ const FixedBottom = styled.div`
   right: 0;
   border-top: 2px solid black;
   text-align: center;
+`;
+
+const FixedBottomDark = styled(FixedBottom)`
+  background: #222;
+  cursor: pointer;
+  font-weight: bold;
+  color: #fff;
+  font-size: 2rem;
+  padding: 8px;
 `;
 
 const MicButton = styled.div`
