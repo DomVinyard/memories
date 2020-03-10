@@ -11,9 +11,9 @@ import { ReactMic } from "react-mic";
 
 const App = () => {
   const [todos, setTodos] = useState([]);
+  const [recordings, setRecordings] = useState([]);
   const [showMenu, setShowMenu] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [recording, setRecording] = useState(null);
   const inputElement = useRef(null);
   useEffect(() => {
     const fetchAll = async () => {
@@ -38,50 +38,51 @@ const App = () => {
     };
     fetchAll();
   }, []);
-  const saveTodo = async e => {
-    e.preventDefault();
-    const todoValue = inputElement.current.value;
-
-    if (!todoValue) {
-      alert("Please add Todo title");
-      inputElement.current.focus();
+  const saveRecording = async recordingValue => {
+    if (!saveRecording) {
+      alert("no recording");
       return false;
     }
-
-    // reset input to empty
-    inputElement.current.value = "";
-
-    const todoInfo = {
-      title: todoValue,
+    const recordingInfo = {
+      ...recordingValue,
       completed: false
     };
+
     // Optimistically add todo to UI
-    const newTodoArray = [
+    const optimisticRecordingsState = [
+      ...todos,
       {
-        data: todoInfo,
+        data: recordingInfo,
         ts: new Date().getTime() * 10000
       }
     ];
+    setTodos(optimisticRecordingsState);
 
-    const optimisticTodoState = newTodoArray.concat(todos);
+    var reader = new FileReader();
+    reader.readAsDataURL(recordingValue.blob);
+    reader.onloadend = async () => {
+      var base64data = reader.result;
+      console.log(base64data);
+      try {
+        recordingInfo.base64data = base64data;
+        const response = await api.create(recordingInfo);
 
-    setTodos(optimisticTodoState);
+        console.log({ response });
+        // remove temporaryValue from state and persist API response
+        const persistedState = removeOptimisticTodo(todos).concat(response);
+        // Set persisted value to state
+        setTodos(persistedState);
+      } catch (e) {
+        console.log("An API error occurred", e);
+        // const revertedState = removeOptimisticTodo(todos);
+        // // Reset to original state
+        // setTodos(revertedState);
+      }
+    };
+
     // Make API request to create new todo
-    try {
-      const response = await api.create(todoInfo);
-
-      console.log(response);
-      // remove temporaryValue from state and persist API response
-      const persistedState = removeOptimisticTodo(todos).concat(response);
-      // Set persisted value to state
-      setTodos(persistedState);
-    } catch (e) {
-      console.log("An API error occurred", e);
-      const revertedState = removeOptimisticTodo(todos);
-      // Reset to original state
-      setTodos(revertedState);
-    }
   };
+
   const deleteTodo = e => {
     const todoId = e.target.dataset.id;
 
@@ -120,32 +121,7 @@ const App = () => {
         );
       });
   };
-  const handleTodoCheckbox = event => {
-    const { target } = event;
-    const todoCompleted = target.checked;
-    const todoId = target.dataset.id;
 
-    const updatedTodos = todos.map((todo, i) => {
-      const { data } = todo;
-      const id = getTodoId(todo);
-      if (id === todoId && data.completed !== todoCompleted) {
-        data.completed = todoCompleted;
-      }
-      return todo;
-    });
-    setTodos(updatedTodos);
-
-    api
-      .update(todoId, {
-        completed: todoCompleted
-      })
-      .then(() => {
-        console.log(`update todo ${todoId}`, todoCompleted);
-      })
-      .catch(e => {
-        console.log("An API error occurred", e);
-      });
-  };
   const updateTodoTitle = (event, currentValue) => {
     let isDifferent = false;
     const todoId = event.target.dataset.key;
@@ -248,26 +224,15 @@ const App = () => {
               </button>
             );
           }
-          const boxIcon = data.completed ? "#todo__box__done" : "#todo__box";
           return (
             <div key={i} className="todo-item">
               <label className="todo">
-                <input
-                  data-id={id}
-                  className="todo__state"
-                  type="checkbox"
-                  onChange={handleTodoCheckbox}
-                  checked={data.completed}
-                />
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 200 25"
-                  className="todo__icon"
-                >
-                  <use xlinkHref={`${boxIcon}`} className="todo__box"></use>
-                  <use xlinkHref="#todo__check" className="todo__check"></use>
-                </svg>
                 <div className="todo-list-title">
+                  <div>Me:</div>
+                  <div>
+                    <i class="fas fa-play"></i>{" "}
+                    {Math.round((data.stopTime - data.startTime) / 1000)}s
+                  </div>
                   <ContentEditable
                     tagName="span"
                     editKey={id}
@@ -301,7 +266,8 @@ const App = () => {
           onStop={recordedBlob => {
             console.log("recordedBlob is: ", recordedBlob);
             setIsRecording(false);
-            setRecording(recordedBlob);
+            // setRecording(recordedBlob);
+            saveRecording(recordedBlob);
           }}
           onData={recordedBlob =>
             console.log("chunk of real-time data is: ", recordedBlob)
@@ -311,11 +277,7 @@ const App = () => {
         />
         <button
           onClick={() => {
-            console.log("stop");
             setIsRecording("awaitingConfirm");
-            const confirmed = window.confirm("save recording?");
-            if (confirmed) console.log("save");
-            else console.log("not saved");
           }}
           type="button"
         >
@@ -327,25 +289,6 @@ const App = () => {
   return (
     <div className="app">
       <div className="todo-list">
-        <h2>
-          Create todo
-          <SettingsIcon onClick={openModal} className="mobile-toggle" />
-        </h2>
-        <form className="todo-create-wrapper" onSubmit={saveTodo}>
-          <input
-            className="todo-create-input"
-            placeholder="Add a todo item"
-            name="name"
-            ref={inputElement}
-            autoComplete="off"
-            style={{ marginRight: 20 }}
-          />
-          <div className="todo-actions">
-            <button className="todo-create-button">Create todo</button>
-            <SettingsIcon onClick={openModal} className="desktop-toggle" />
-          </div>
-        </form>
-
         <RenderTodos />
         <RecordFooter></RecordFooter>
       </div>
