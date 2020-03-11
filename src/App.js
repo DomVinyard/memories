@@ -1,46 +1,99 @@
 import React, { useEffect, useState, useRef } from "react";
 import ls from "local-storage";
 import api from "./utils/api";
-import sortByDate from "./utils/sortByDate";
 import isLocalHost from "./utils/isLocalHost";
 import "./App.css";
 import styled from "styled-components";
-import { ReactMic } from "@cleandersonlobo/react-mic";
+import { RecordRTCPromisesHandler } from "recordrtc";
+import { DBConfig } from "./DBConfig";
+import { initDB, useIndexedDB } from "react-indexed-db";
+import cuid from "cuid";
+import moment from "moment";
+
+initDB(DBConfig);
 
 // She wasn't doing a thing that I could see,
 // except standing there leaning on the balcony railing,
 // holding the universe together.”
 
+function readAsDataURLAsync(blob) {
+  return new Promise((resolve, reject) => {
+    let reader = new FileReader();
+    reader.onload = () => {
+      resolve(reader.result);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 const App = () => {
+  const [recordings, setRecordings] = useState([]);
   const [todos, setTodos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
+  const [recorder, setRecorder] = useState();
+  const [recordingStart, setRecordingStart] = useState();
+  const startRecording = async () => {
+    try {
+      let stream = await navigator.mediaDevices.getUserMedia({
+        audio: true
+      });
+      const newRecorder = new RecordRTCPromisesHandler(stream, {
+        type: "audio"
+      });
+      setRecorder(newRecorder);
+      newRecorder.startRecording();
+      setRecordingStart(new Date());
+      setIsRecording(true);
+    } catch (err) {
+      console.log("Uh oh... unable to get stream...", err);
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      await recorder.stopRecording();
+      let blob = await recorder.getBlob();
+      const recordingEnd = new Date();
+      const length = recordingEnd - recordingStart;
+      const newRecordingID = cuid();
+      const recording = {
+        id: newRecordingID,
+        blob,
+        recordingStart,
+        recordingEnd,
+        length
+      };
+      const { add } = useIndexedDB("recordings");
+      add(recording, newRecordingID);
+      setRecordings([
+        ...recordings,
+        {
+          id: newRecordingID,
+          ...recording,
+          base64: await readAsDataURLAsync(blob)
+        }
+      ]);
+      setIsRecording(false);
+    } catch (error) {
+      console.log(error);
+    }
+  };
   useEffect(() => {
     const fetchAll = async () => {
-      // Fetch all todos
-      api.readAll().then(todos => {
-        if (todos.message === "unauthorized") {
-          if (isLocalHost()) {
-            alert(
-              "FaunaDB key is not unauthorized. Make sure you set it in terminal session where you ran `npm start`. Visit http://bit.ly/set-fauna-key for more info"
-            );
-          } else {
-            alert(
-              "FaunaDB key is not unauthorized. Verify the key `FAUNADB_SERVER_SECRET` set in Netlify enviroment variables is correct"
-            );
-          }
-          return false;
-        }
-
-        console.log("all todos", todos);
-        setTodos(
-          [...todos].map(todo => {
-            todo.data.base64data = ls(getTodoId(todo));
-            return todo;
-          })
-        );
-        setLoading(false);
-      });
+      const { getAll } = useIndexedDB("recordings");
+      const recordings = await getAll();
+      console.log(recordings);
+      let newRecordings = [];
+      for (const recording of recordings) {
+        newRecordings.push({
+          ...recording,
+          base64: await readAsDataURLAsync(recording.blob)
+        });
+      }
+      setRecordings(newRecordings);
+      return setIsLoading(false);
     };
     fetchAll();
   }, []);
@@ -91,6 +144,11 @@ const App = () => {
 
   const deleteTodo = async e => {
     console.log("delete me");
+    const { deleteRecord } = useIndexedDB("recordings");
+    const id = e.target.dataset.id;
+    setRecordings(recordings.filter(recording => recording.id !== id));
+    deleteRecord(id);
+    return;
     const todoId = e.target.dataset.id;
 
     // Optimistically remove todo from UI
@@ -117,6 +175,7 @@ const App = () => {
     // Make API request to delete todo
     try {
       await api.delete(todoId);
+      ls.remove(todoId);
       console.log(`deleted todo id ${todoId}`);
     } catch (e) {
       console.log(`There was an error removing ${todoId}`, e);
@@ -127,77 +186,24 @@ const App = () => {
     }
   };
 
-  const RenderTodos = () => {
-    if (loading) {
-      return (
-        <CenterText>
-          <i class="fas fa-spinner fa-pulse"></i>
-        </CenterText>
-      );
-    }
-    if (!todos || !todos.length) {
-      // Loading State here
-      return <CenterText>no recordings</CenterText>;
-    }
-
-    const timeStampKey = "startTime";
-    const orderBy = "desc"; // or `asc`
-    const sortOrder = sortByDate(timeStampKey, orderBy);
-    const todosByDate = todos.sort(sortOrder);
-
+  if (isLoading) {
     return (
-      <div>
-        {todosByDate.map((todo, i) => {
-          const { data, ref } = todo;
-          if (!data) return null;
-          const id = getTodoId(todo);
-          // only show delete button after create API response returns
-          const deleteButton = ref ? (
-            <button data-id={id} onClick={deleteTodo}>
-              delete
-            </button>
-          ) : (
-            <span>
-              <i class="fas fa-spinner fa-pulse"></i>
-            </span>
-          );
-
-          return (
-            <div key={i} className="todo-item">
-              <label className="todo">
-                <audio controls src={data.base64data} />
-              </label>
-              {deleteButton}
-            </div>
-          );
-        })}
-      </div>
+      <CenterText>
+        <i class="fas fa-spinner fa-pulse"></i>
+      </CenterText>
     );
-  };
+  }
+
+  if (!recordings || !recordings.length) {
+    // Loading State here
+    return <CenterText>no recordings</CenterText>;
+  }
 
   if (isRecording) {
     return (
       <div>
-        <ReactMic
-          record={isRecording && isRecording !== "awaitingConfirm"}
-          className="sound-wave"
-          onStop={recordedBlob => {
-            console.log("recordedBlob is: ", recordedBlob);
-            setIsRecording(false);
-            // setRecording(recordedBlob);
-            saveRecording(recordedBlob);
-          }}
-          onData={recordedBlob =>
-            console.log("chunk of real-time data is: ", recordedBlob)
-          }
-          strokeColor="#000000"
-          backgroundColor="#FF4081"
-        />
-        <FixedBottomDark
-          onClick={() => {
-            setIsRecording("awaitingConfirm");
-          }}
-        >
+        <div>recording </div>
+        <FixedBottomDark onClick={() => stopRecording()}>
           End Recording
         </FixedBottomDark>
       </div>
@@ -206,10 +212,33 @@ const App = () => {
   return (
     <div className="app">
       <div className="todo-list">
-        <RenderTodos />
+        <div>
+          {recordings.filter(Boolean).map((recording, i) => {
+            const { id, recordingStart, base64 } = recording;
+            console.log({ recording });
+            // only show delete button after create API response returns
+            return (
+              <RecordingContainer>
+                <div>{moment(recordingStart).fromNow()}</div>
+                <div key={id} className="todo-item">
+                  <label className="todo">
+                    <audio controls src={base64} />
+                  </label>
+                  <button data-id={id} onClick={deleteTodo}>
+                    delete
+                  </button>
+                </div>
+              </RecordingContainer>
+            );
+          })}
+        </div>
 
         <FixedBottom>
-          <MicButton onClick={() => setIsRecording(true)}>
+          <MicButton
+            onClick={async () => {
+              startRecording();
+            }}
+          >
             <i class="fas fa-microphone"></i>
           </MicButton>
         </FixedBottom>
@@ -234,6 +263,9 @@ function getTodoId(todo) {
 
 export default App;
 
+const RecordingContainer = styled.div`
+  margin-top: 1rem;
+`;
 const FixedBottom = styled.div`
   position: fixed;
   background: #eee;
