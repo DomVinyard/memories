@@ -301,12 +301,12 @@ const PublicContainer = styled.div`
 
   text-align: center;
   h1 {
-    padding-top: 33vh;
     font-family: "Pacifico", cursive;
     color: white;
     font-size: 5rem;
     margin: 0;
     padding: 0;
+    padding-top: 25vh;
   }
 `;
 export default App;
