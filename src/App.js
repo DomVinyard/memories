@@ -185,7 +185,9 @@ const App = () => {
           </button>
         </FixedTop>
         {!recordings || !recordings.length ? (
-          <CenterText>no recordings</CenterText>
+          <CenterText>
+            <h2>no recordings</h2>click the mic to record a memory
+          </CenterText>
         ) : (
           <ScrollableFeed>
             <div style={{ height: 60 }}></div>
@@ -299,6 +301,7 @@ const PublicContainer = styled.div`
 
   text-align: center;
   h1 {
+    padding-top: 33vh;
     font-family: "Pacifico", cursive;
     color: white;
     font-size: 5rem;
