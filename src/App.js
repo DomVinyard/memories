@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import SettingsMenu from "./components/SettingsMenu";
+import ls from "local-storage";
 import api from "./utils/api";
 import sortByDate from "./utils/sortByDate";
 import isLocalHost from "./utils/isLocalHost";
@@ -14,9 +14,7 @@ import { ReactMic } from "@cleandersonlobo/react-mic";
 const App = () => {
   const [todos, setTodos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showMenu, setShowMenu] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const inputElement = useRef(null);
   useEffect(() => {
     const fetchAll = async () => {
       // Fetch all todos
@@ -126,54 +124,6 @@ const App = () => {
       });
   };
 
-  const clearCompleted = () => {
-    // Optimistically remove todos from UI
-    const data = todos.reduce(
-      (acc, current) => {
-        if (current.data.completed) {
-          // save item being removed for rollback
-          acc.completedTodoIds = acc.completedTodoIds.concat(
-            getTodoId(current)
-          );
-          return acc;
-        }
-        // filter deleted todo out of the todos list
-        acc.optimisticState = acc.optimisticState.concat(current);
-        return acc;
-      },
-      {
-        completedTodoIds: [],
-        optimisticState: []
-      }
-    );
-
-    // only set state if completed todos exist
-    if (!data.completedTodoIds.length) {
-      alert("Please check off some todos to batch remove them");
-      closeModal();
-      return false;
-    }
-    setTodos(data.optimisticState);
-
-    setTimeout(() => {
-      closeModal();
-    }, 600);
-
-    api
-      .batchDelete(data.completedTodoIds)
-      .then(() => {
-        console.log(`Batch removal complete`, data.completedTodoIds);
-      })
-      .catch(e => {
-        console.log("An API error occurred", e);
-      });
-  };
-  const closeModal = e => {
-    setShowMenu(false);
-  };
-  const openModal = () => {
-    setShowMenu(true);
-  };
   const RenderTodos = () => {
     if (loading) {
       return (

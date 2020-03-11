@@ -5,6 +5,7 @@
   "dependencies": {
     "@cleandersonlobo/react-mic": "^1.2.0",
     "faunadb": "^2.6.1",
+    "local-storage": "^2.0.0",
     "markdown-magic": "^1.0.0",
     "react": "^16.7.0",
     "react-dom": "^16.7.0",
