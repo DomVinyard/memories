@@ -11,6 +11,7 @@ import netlifyIdentity from "netlify-identity-widget";
 
 initDB(DBConfig);
 netlifyIdentity.init();
+netlifyIdentity.on("login", () => window.location.reload());
 netlifyIdentity.on("logout", () => window.location.reload());
 
 // She wasn't doing a thing that I could see,
@@ -187,6 +188,7 @@ const App = () => {
           <CenterText>no recordings</CenterText>
         ) : (
           <ScrollableFeed>
+            <div style={{ height: 60 }}></div>
             {recordings.filter(Boolean).map((recording, i) => {
               const { id, recordingStart, base64 } = recording;
               return (
