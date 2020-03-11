@@ -29,14 +29,22 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const [recorder, setRecorder] = useState();
-  const [recordingStart, setRecordingStart] = useState();
+  const [recordingStart, setRecordingStart] = useState(false);
+  const [timestamp, setTimestamp] = useState(false);
+  const isReadyToRecord =
+    timestamp && recordingStart && timestamp - recordingStart > 0;
   const startRecording = async () => {
     try {
       let stream = await navigator.mediaDevices.getUserMedia({
         audio: true
       });
       const newRecorder = new RecordRTCPromisesHandler(stream, {
-        type: "audio"
+        type: "audio",
+        timeSlice: 1000,
+        onTimeStamp: timestamp => {
+          setTimestamp(timestamp);
+          console.log({ timestamp, recordingStart });
+        }
       });
       setRecorder(newRecorder);
       newRecorder.startRecording();
@@ -72,6 +80,8 @@ const App = () => {
         }
       ]);
       setIsRecording(false);
+      setRecordingStart(false);
+      setTimestamp(false);
     } catch (error) {
       console.log(error);
     }
@@ -94,7 +104,6 @@ const App = () => {
   }, []);
 
   const deleteTodo = async e => {
-    console.log("delete me");
     const { deleteRecord } = useIndexedDB("recordings");
     const id = e.target.dataset.id;
     setRecordings(recordings.filter(recording => recording.id !== id));
@@ -112,7 +121,19 @@ const App = () => {
   if (isRecording) {
     return (
       <div>
-        <div>recording </div>
+        <BigMic>
+          <i
+            className="fas fa-microphone"
+            style={{ opacity: isReadyToRecord ? 1 : 0.2 }}
+          ></i>{" "}
+          <TimeStamp>
+            {isReadyToRecord ? (
+              moment(timestamp - recordingStart).format("mm:ss")
+            ) : (
+              <i className="fas fa-spinner fa-pulse"></i>
+            )}
+          </TimeStamp>
+        </BigMic>
         <FixedBottomDark onClick={() => stopRecording()}>
           End Recording
         </FixedBottomDark>
@@ -128,11 +149,9 @@ const App = () => {
           <div>
             {recordings.filter(Boolean).map((recording, i) => {
               const { id, recordingStart, base64 } = recording;
-              console.log({ recording });
               // only show delete button after create API response returns
               return (
                 <RecordingContainer key={id}>
-                  <div>{moment(recordingStart).fromNow()}</div>
                   <div key={id} className="todo-item">
                     <label className="todo">
                       <audio controls src={base64} />
@@ -157,6 +176,24 @@ const App = () => {
 };
 
 export default App;
+
+const TimeStamp = styled.div`
+  text-align: center;
+  font-size: 2rem;
+`;
+const BigMic = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  text-align: center;
+  .fa-microphone {
+    font-size: 12rem;
+    color: #ff4d22;
+  }
+`;
 
 const RecordingContainer = styled.div`
   margin-top: 1rem;
