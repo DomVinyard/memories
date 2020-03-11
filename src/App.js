@@ -37,7 +37,7 @@ const App = () => {
   const [timestamp, setTimestamp] = useState(false);
   const messagesEndRef = useRef(null);
 
-  const user = true; // netlifyIdentity.currentUser();
+  const user = netlifyIdentity.currentUser();
 
   // Fetch data on load
 
