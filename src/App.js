@@ -1,15 +1,15 @@
 import React, { useEffect, useState, useRef } from "react";
-import ContentEditable from "./components/ContentEditable";
 import SettingsMenu from "./components/SettingsMenu";
-import SettingsIcon from "./components/SettingsIcon";
 import api from "./utils/api";
 import sortByDate from "./utils/sortByDate";
 import isLocalHost from "./utils/isLocalHost";
 import "./App.css";
 import styled from "styled-components";
 import { ReactMic } from "@cleandersonlobo/react-mic";
-import AudioPlayer from "react-h5-audio-player";
-import "react-h5-audio-player/lib/styles.css";
+
+// She wasn't doing a thing that I could see,
+// except standing there leaning on the balcony railing,
+// holding the universe together.”
 
 const App = () => {
   const [todos, setTodos] = useState([]);
@@ -77,9 +77,9 @@ const App = () => {
         setTodos(persistedState);
       } catch (e) {
         console.log("An API error occurred", e);
-        // const revertedState = removeOptimisticTodo(todos);
+        const revertedState = removeOptimisticTodo(todos);
         // // Reset to original state
-        // setTodos(revertedState);
+        setTodos(revertedState);
       }
     };
 
@@ -126,35 +126,6 @@ const App = () => {
       });
   };
 
-  const updateTodoTitle = (event, currentValue) => {
-    let isDifferent = false;
-    const todoId = event.target.dataset.key;
-
-    const updatedTodos = todos.map((todo, i) => {
-      const id = getTodoId(todo);
-      if (id === todoId && todo.data.title !== currentValue) {
-        todo.data.title = currentValue;
-        isDifferent = true;
-      }
-      return todo;
-    });
-
-    // only set state if input different
-    if (isDifferent) {
-      setTodos(updatedTodos);
-
-      api
-        .update(todoId, {
-          title: currentValue
-        })
-        .then(() => {
-          console.log(`update todo ${todoId}`, currentValue);
-        })
-        .catch(e => {
-          console.log("An API error occurred", e);
-        });
-    }
-  };
   const clearCompleted = () => {
     // Optimistically remove todos from UI
     const data = todos.reduce(
@@ -205,11 +176,15 @@ const App = () => {
   };
   const RenderTodos = () => {
     if (loading) {
-      return "loading";
+      return (
+        <CenterText>
+          <i class="fas fa-spinner fa-pulse"></i>
+        </CenterText>
+      );
     }
     if (!todos || !todos.length) {
       // Loading State here
-      return "no recordings";
+      return <CenterText>no recordings</CenterText>;
     }
 
     const timeStampKey = "startTime";
@@ -286,12 +261,6 @@ const App = () => {
           </MicButton>
         </FixedBottom>
       </div>
-
-      <SettingsMenu
-        showMenu={showMenu}
-        handleModalClose={closeModal}
-        handleClearCompleted={clearCompleted}
-      />
     </div>
   );
 };
@@ -340,4 +309,10 @@ const MicButton = styled.div`
   line-height: 40px;
   margin: 8px auto;
   cursor: pointer;
+`;
+
+const CenterText = styled.div`
+  text-align: center;
+  color: #acacac;
+  margin-top: 40vh;
 `;
