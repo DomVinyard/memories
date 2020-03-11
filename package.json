@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@cleandersonlobo/react-mic": "^1.2.0",
+    "@google-cloud/speech": "^3.6.0",
     "cuid": "^2.1.8",
     "faunadb": "^2.6.1",
     "local-storage": "^2.0.0",
