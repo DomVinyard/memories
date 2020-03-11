@@ -37,8 +37,9 @@ const App = () => {
   const [recordingStart, setRecordingStart] = useState(false);
   const [timestamp, setTimestamp] = useState(false);
   const messagesEndRef = useRef(null);
+  const videoPreviewRef = useRef(null);
 
-  const user = netlifyIdentity.currentUser();
+  const user = true; //netlifyIdentity.currentUser();
 
   // Fetch data on load
 
@@ -66,14 +67,15 @@ const App = () => {
 
   // Start and stop (and save) recording
 
-  const startRecording = async () => {
+  const startRecording = async type => {
     try {
-      let stream = await navigator.mediaDevices.getUserMedia({
-        audio: true
+      let camera = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: type === "video"
       });
-      console.log({ stream });
-      const newRecorder = new RecordRTCPromisesHandler(stream, {
-        type: "audio",
+      console.log({ camera });
+      const newRecorder = new RecordRTCPromisesHandler(camera, {
+        type,
         timeSlice: 1000,
         onTimeStamp: timestamp => {
           setTimestamp(timestamp);
@@ -83,7 +85,12 @@ const App = () => {
       setRecorder(newRecorder);
       newRecorder.startRecording();
       setRecordingStart(new Date());
-      setIsRecording(true);
+      setIsRecording(type);
+      if (type === "video" && videoPreviewRef.current) {
+        videoPreviewRef.current.srcObject = camera;
+        videoPreviewRef.current.muted = true;
+        videoPreviewRef.current.volume = 1;
+      }
     } catch (err) {
       console.log("Uh oh... unable to get stream...", err);
     }
@@ -101,7 +108,8 @@ const App = () => {
         blob,
         recordingStart,
         recordingEnd,
-        length
+        length,
+        type: isRecording
       };
       const { add } = useIndexedDB("recordings");
       add(recording, newRecordingID);
@@ -126,6 +134,45 @@ const App = () => {
     const id = e.target.dataset.id;
     setRecordings(recordings.filter(recording => recording.id !== id));
     deleteRecord(id);
+  };
+
+  const transcribe = async e => {
+    const id = e.target.dataset.id;
+    const recording = recordings.find(recording => recording.id === id);
+    console.log(recording);
+    const speech = require("@google-cloud/speech");
+    const fs = require("fs");
+
+    // Creates a client
+    const client = new speech.SpeechClient();
+
+    // The name of the audio file to transcribe
+    const fileName = "./resources/audio.raw";
+
+    // Reads a local audio file and converts it to base64
+    const file = fs.readFileSync(fileName);
+    const audioBytes = file.toString("base64");
+
+    // The audio file's encoding, sample rate in hertz, and BCP-47 language code
+    const audio = {
+      content: audioBytes
+    };
+    const config = {
+      encoding: "LINEAR16",
+      sampleRateHertz: 16000,
+      languageCode: "en-US"
+    };
+    const request = {
+      audio: audio,
+      config: config
+    };
+
+    // Detects speech in the audio file
+    const [response] = await client.recognize(request);
+    const transcription = response.results
+      .map(result => result.alternatives[0].transcript)
+      .join("\n");
+    console.log(`Transcription: ${transcription}`);
   };
 
   if (!user) {
@@ -156,7 +203,16 @@ const App = () => {
       <Outer className="app">
         <Inner>
           <BigMic>
-            <i className="fas fa-microphone"></i>{" "}
+            {isRecording === "video" ? (
+              <video
+                width={300}
+                autoPlay
+                playsInline
+                ref={videoPreviewRef}
+              ></video>
+            ) : (
+              <i className="fas fa-microphone"></i>
+            )}
             <TimeStamp>
               {timestamp && recordingStart && timestamp - recordingStart > 0
                 ? moment(timestamp - recordingStart).format("mm:ss")
@@ -192,16 +248,23 @@ const App = () => {
           <ScrollableFeed>
             <div style={{ height: 60 }}></div>
             {recordings.filter(Boolean).map((recording, i) => {
-              const { id, recordingStart, base64 } = recording;
+              const { id, recordingStart, base64, type } = recording;
               return (
                 <RecordingContainer key={id}>
                   <div>{moment(recordingStart).fromNow()}</div>
                   <div key={id} className="todo-item">
                     <label className="todo">
-                      <audio controls src={base64} />
+                      {type === "video" ? (
+                        <video controls src={base64} width={200} />
+                      ) : (
+                        <audio controls src={base64} />
+                      )}
                     </label>
                     <button data-id={id} onClick={deleteRecording}>
                       delete
+                    </button>
+                    <button data-id={id} onClick={transcribe}>
+                      text
                     </button>
                   </div>
                 </RecordingContainer>
@@ -209,11 +272,14 @@ const App = () => {
             })}
           </ScrollableFeed>
         )}
-        <div ref={messagesEndRef} />
+        <div style={{ height: 80 }} ref={messagesEndRef} />
         <FixedBottom>
-          <MicButton onClick={async () => startRecording()}>
+          <MicButton onClick={async () => startRecording("audio")}>
             <i className="fas fa-microphone"></i>
           </MicButton>
+          <VidButton onClick={async () => startRecording("video")}>
+            <i class="fas fa-video"></i>
+          </VidButton>
         </FixedBottom>
       </Inner>
     </Outer>
@@ -252,6 +318,7 @@ const FixedTop = styled.div`
   right: 0;
   height: 40px;
   background: #222;
+  z-index: 1;
   color: white;
   position: fixed;
   padding: 8px;
@@ -283,8 +350,13 @@ const MicButton = styled.div`
   border-radius: 100%;
   font-size: 1.6rem;
   line-height: 60px;
-  margin: 8px auto;
+  margin: 8px 8px;
+  display: inline-block;
   cursor: pointer;
+`;
+
+const VidButton = styled(MicButton)`
+  background: #21ff28;
 `;
 
 const CenterText = styled.div`

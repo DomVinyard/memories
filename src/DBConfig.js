@@ -19,6 +19,10 @@ export const DBConfig = {
         {
           name: "length",
           options: { unique: false }
+        },
+        {
+          name: "type",
+          options: { unique: false }
         }
       ]
     }
