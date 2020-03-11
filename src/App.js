@@ -31,13 +31,13 @@ const App = () => {
   const [recorder, setRecorder] = useState();
   const [recordingStart, setRecordingStart] = useState(false);
   const [timestamp, setTimestamp] = useState(false);
-  const isReadyToRecord =
-    timestamp && recordingStart && timestamp - recordingStart > 0;
   const startRecording = async () => {
     try {
       let stream = await navigator.mediaDevices.getUserMedia({
         audio: true
       });
+      console.log({ stream });
+      // alert(JSON.stringify(stream));
       const newRecorder = new RecordRTCPromisesHandler(stream, {
         type: "audio",
         timeSlice: 1000,
@@ -122,16 +122,11 @@ const App = () => {
     return (
       <div>
         <BigMic>
-          <i
-            className="fas fa-microphone"
-            style={{ opacity: isReadyToRecord ? 1 : 0.2 }}
-          ></i>{" "}
+          <i className="fas fa-microphone"></i>{" "}
           <TimeStamp>
-            {isReadyToRecord ? (
-              moment(timestamp - recordingStart).format("mm:ss")
-            ) : (
-              <i className="fas fa-spinner fa-pulse"></i>
-            )}
+            {timestamp && recordingStart && timestamp - recordingStart > 0
+              ? moment(timestamp - recordingStart).format("mm:ss")
+              : "00:00"}
           </TimeStamp>
         </BigMic>
         <FixedBottomDark onClick={() => stopRecording()}>
@@ -152,6 +147,7 @@ const App = () => {
               // only show delete button after create API response returns
               return (
                 <RecordingContainer key={id}>
+                  <div>{moment(recordingStart).fromNow()}</div>
                   <div key={id} className="todo-item">
                     <label className="todo">
                       <audio controls src={base64} />
@@ -196,7 +192,7 @@ const BigMic = styled.div`
 `;
 
 const RecordingContainer = styled.div`
-  margin-top: 1rem;
+  margin-top: 0.75rem;
 `;
 const FixedBottom = styled.div`
   position: fixed;
