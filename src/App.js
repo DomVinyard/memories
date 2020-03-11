@@ -33,14 +33,19 @@ const App = () => {
         }
 
         console.log("all todos", todos);
-        setTodos(todos);
+        setTodos(
+          [...todos].map(todo => {
+            todo.data.base64data = ls(getTodoId(todo));
+            return todo;
+          })
+        );
         setLoading(false);
       });
     };
     fetchAll();
   }, []);
   const saveRecording = async recordingValue => {
-    if (!saveRecording) {
+    if (!recordingValue) {
       alert("no recording");
       return false;
     }
@@ -49,30 +54,30 @@ const App = () => {
       completed: false
     };
 
-    // Optimistically add todo to UI
-    const optimisticRecordingsState = [
-      ...todos,
-      {
-        data: recordingInfo,
-        ts: new Date().getTime() * 10000
-      }
-    ];
-    setTodos(optimisticRecordingsState);
-
     var reader = new FileReader();
     reader.readAsDataURL(recordingValue.blob);
     reader.onloadend = async () => {
-      var base64data = reader.result;
-      console.log(base64data);
       try {
-        recordingInfo.base64data = base64data;
-        const response = await api.create(recordingInfo);
-
-        console.log({ response });
+        const base64data = reader.result;
+        // Optimistically add todo to UI
+        const optimisticRecordingsState = [
+          ...todos,
+          {
+            data: { ...recordingInfo, base64data },
+            ts: new Date().getTime() * 10000
+          }
+        ];
+        console.log({ optimisticRecordingsState });
+        setTodos(optimisticRecordingsState);
+        const newItem = await api.create(recordingInfo);
+        const newId = getTodoId(newItem);
+        ls(newId, base64data);
+        newItem.data.base64data = base64data;
         // remove temporaryValue from state and persist API response
-        const persistedState = removeOptimisticTodo(todos).concat(response);
+        const persistedState = removeOptimisticTodo(todos).concat(newItem);
         // Set persisted value to state
         setTodos(persistedState);
+        console.log({ persistedState });
       } catch (e) {
         console.log("An API error occurred", e);
         const revertedState = removeOptimisticTodo(todos);
@@ -84,7 +89,7 @@ const App = () => {
     // Make API request to create new todo
   };
 
-  const deleteTodo = e => {
+  const deleteTodo = async e => {
     console.log("delete me");
     const todoId = e.target.dataset.id;
 
@@ -110,18 +115,16 @@ const App = () => {
     setTodos(filteredTodos.optimisticState);
 
     // Make API request to delete todo
-    api
-      .delete(todoId)
-      .then(() => {
-        console.log(`deleted todo id ${todoId}`);
-      })
-      .catch(e => {
-        console.log(`There was an error removing ${todoId}`, e);
-        // Add item removed back to list
-        setTodos(
-          filteredTodos.optimisticState.concat(filteredTodos.rollbackTodo)
-        );
-      });
+    try {
+      await api.delete(todoId);
+      console.log(`deleted todo id ${todoId}`);
+    } catch (e) {
+      console.log(`There was an error removing ${todoId}`, e);
+      // Add item removed back to list
+      setTodos(
+        filteredTodos.optimisticState.concat(filteredTodos.rollbackTodo)
+      );
+    }
   };
 
   const RenderTodos = () => {
