@@ -1,11 +1,12 @@
-import React, { useEffect, useState, useRef } from "react";
-import SettingsMenu from "./components/SettingsMenu";
+import React, { useEffect, useState } from "react";
 import api from "./utils/api";
 import sortByDate from "./utils/sortByDate";
 import isLocalHost from "./utils/isLocalHost";
 import "./App.css";
 import styled from "styled-components";
 import { ReactMic } from "@cleandersonlobo/react-mic";
+import ls from "local-storage";
+import cuid from "cuid";
 
 // She wasn't doing a thing that I could see,
 // except standing there leaning on the balcony railing,
@@ -14,12 +15,10 @@ import { ReactMic } from "@cleandersonlobo/react-mic";
 const App = () => {
   const [todos, setTodos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showMenu, setShowMenu] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const inputElement = useRef(null);
+
   useEffect(() => {
     const fetchAll = async () => {
-      // Fetch all todos
       api.readAll().then(todos => {
         if (todos.message === "unauthorized") {
           if (isLocalHost()) {
@@ -34,43 +33,44 @@ const App = () => {
           return false;
         }
 
-        console.log("all todos", todos);
-        setTodos(todos);
+        setTodos([...todos].map(({ data }) => ls(data.id)).filter(Boolean));
         setLoading(false);
       });
     };
     fetchAll();
   }, []);
+
   const saveRecording = async recordingValue => {
     if (!saveRecording) {
       alert("no recording");
       return false;
     }
-    const recordingInfo = {
-      ...recordingValue,
-      completed: false
-    };
 
-    // Optimistically add todo to UI
-    const optimisticRecordingsState = [
-      ...todos,
-      {
-        data: recordingInfo,
-        ts: new Date().getTime() * 10000
-      }
-    ];
-    setTodos(optimisticRecordingsState);
-
+    // We save the base64 data locally,
     var reader = new FileReader();
     reader.readAsDataURL(recordingValue.blob);
     reader.onloadend = async () => {
       var base64data = reader.result;
-      console.log(base64data);
-      try {
-        recordingInfo.base64data = base64data;
-        const response = await api.create(recordingInfo);
+      const recordingInfo = {
+        ...recordingValue,
+        completed: false
+      };
 
+      // Optimistically add todo to UI
+      const localRecordingInfo = {
+        ...recordingInfo,
+        base64data
+      };
+      const optimisticRecordingsState = [...todos, localRecordingInfo];
+
+      setTodos(optimisticRecordingsState);
+      console.log({ optimisticRecordingsState });
+      try {
+        // we dont send it to the database
+        const response = await api.create(recordingInfo);
         console.log({ response });
+        ls(recordingInfo.id, localRecordingInfo);
+        // console.log({ respponse });
         // remove temporaryValue from state and persist API response
         const persistedState = removeOptimisticTodo(todos).concat(response);
         // Set persisted value to state
@@ -86,7 +86,7 @@ const App = () => {
     // Make API request to create new todo
   };
 
-  const deleteTodo = e => {
+  const deleteTodo = async e => {
     console.log("delete me");
     const todoId = e.target.dataset.id;
 
@@ -108,72 +108,25 @@ const App = () => {
         optimisticState: []
       }
     );
-
-    setTodos(filteredTodos.optimisticState);
-
-    // Make API request to delete todo
-    api
-      .delete(todoId)
-      .then(() => {
-        console.log(`deleted todo id ${todoId}`);
-      })
-      .catch(e => {
-        console.log(`There was an error removing ${todoId}`, e);
-        // Add item removed back to list
-        setTodos(
-          filteredTodos.optimisticState.concat(filteredTodos.rollbackTodo)
-        );
-      });
-  };
-
-  const clearCompleted = () => {
-    // Optimistically remove todos from UI
-    const data = todos.reduce(
-      (acc, current) => {
-        if (current.data.completed) {
-          // save item being removed for rollback
-          acc.completedTodoIds = acc.completedTodoIds.concat(
-            getTodoId(current)
-          );
-          return acc;
-        }
-        // filter deleted todo out of the todos list
-        acc.optimisticState = acc.optimisticState.concat(current);
-        return acc;
-      },
-      {
-        completedTodoIds: [],
-        optimisticState: []
+    try {
+      setTodos(filteredTodos.optimisticState);
+      // Make API request to delete todo
+      const response = await api.delete(todoId);
+      console.log({ response });
+      if (response.name === "BadRequest") {
+        throw "error deleting";
       }
-    );
-
-    // only set state if completed todos exist
-    if (!data.completedTodoIds.length) {
-      alert("Please check off some todos to batch remove them");
-      closeModal();
-      return false;
+      ls.remove(todoId);
+      console.log(`deleted todo id ${todoId}`);
+    } catch (e) {
+      console.log(`There was an error removing ${todoId}`, e);
+      // Add item removed back to list
+      setTodos(
+        filteredTodos.optimisticState.concat(filteredTodos.rollbackTodo)
+      );
     }
-    setTodos(data.optimisticState);
+  };
 
-    setTimeout(() => {
-      closeModal();
-    }, 600);
-
-    api
-      .batchDelete(data.completedTodoIds)
-      .then(() => {
-        console.log(`Batch removal complete`, data.completedTodoIds);
-      })
-      .catch(e => {
-        console.log("An API error occurred", e);
-      });
-  };
-  const closeModal = e => {
-    setShowMenu(false);
-  };
-  const openModal = () => {
-    setShowMenu(true);
-  };
   const RenderTodos = () => {
     if (loading) {
       return (
@@ -186,20 +139,17 @@ const App = () => {
       // Loading State here
       return <CenterText>no recordings</CenterText>;
     }
-
-    const timeStampKey = "startTime";
-    const orderBy = "desc"; // or `asc`
-    const sortOrder = sortByDate(timeStampKey, orderBy);
-    const todosByDate = todos.sort(sortOrder);
-
+    const todosByDate = todos.sort((a, b) =>
+      a.startTime < b.startTime ? 1 : -1
+    );
+    console.log({ todos, todosByDate });
     return (
       <div>
-        {todosByDate.map((todo, i) => {
-          const { data, ref } = todo;
+        {todosByDate.map((data, i) => {
           if (!data) return null;
-          const id = getTodoId(todo);
-          // only show delete button after create API response returns
-          const deleteButton = ref ? (
+          // only show delete button after create API response returnsconst id = getTodoId(todo);
+          const id = getTodoId(data);
+          const deleteButton = data.base64data ? (
             <button data-id={id} onClick={deleteTodo}>
               delete
             </button>
@@ -231,7 +181,6 @@ const App = () => {
           onStop={recordedBlob => {
             console.log("recordedBlob is: ", recordedBlob);
             setIsRecording(false);
-            // setRecording(recordedBlob);
             saveRecording(recordedBlob);
           }}
           onData={recordedBlob =>
@@ -267,9 +216,7 @@ const App = () => {
 
 function removeOptimisticTodo(todos) {
   // return all 'real' todos
-  return todos.filter(todo => {
-    return todo.ref;
-  });
+  return todos.filter(({ ref }) => ref);
 }
 
 function getTodoId(todo) {

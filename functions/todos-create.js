@@ -13,6 +13,7 @@ exports.handler = async (event, context) => {
   const data = JSON.parse(event.body);
   console.log("Function `todo-create` invoked");
   const todoItem = {
+    id: data.id,
     data: data
   };
   /* construct the fauna query */
