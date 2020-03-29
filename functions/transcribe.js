@@ -1,4 +1,4 @@
-async function main() {
+async function main(event) {
   // Imports the Google Cloud client library
   const speech = require("@google-cloud/speech");
 
@@ -7,7 +7,7 @@ async function main() {
 
   // Reads a local audio file and converts it to base64
 
-  const audioBytes = JSON.parse(event.body);
+  const audioBytes = event.body;
 
   // The audio file's encoding, sample rate in hertz, and BCP-47 language code
   const audio = {
@@ -31,5 +31,5 @@ async function main() {
   console.log(`Transcription: ${transcription}`);
 }
 exports.handler = (event, context) => {
-  main().catch(console.error);
+  main(event).catch(console.error);
 };
